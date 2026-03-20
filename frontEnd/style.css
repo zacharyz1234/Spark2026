@@ -184,3 +184,66 @@ body {
 .output-loading {
   color: #58a6ff;
 }
+
+/* ── File result cards ── */
+.file-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.file-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #58a6ff;
+  margin-bottom: 0.75rem;
+  word-break: break-all;
+}
+
+.result-section {
+  margin-bottom: 0.75rem;
+}
+
+.result-section-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.result-desc {
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.result-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+/* Severity badges */
+.sev-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sev-low      { background: rgba(56,139,253,0.15); color: #58a6ff; }
+.sev-medium   { background: rgba(210,153,34,0.15);  color: #d29922; }
+.sev-high     { background: rgba(248,129,74,0.15);  color: #f8814a; }
+.sev-critical { background: rgba(248,81,73,0.2);    color: #f85149; }
