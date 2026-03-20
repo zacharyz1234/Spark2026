@@ -4,7 +4,6 @@ project(server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Output binaries to build/ at workspace root
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../build)
 
 include(FetchContent)
@@ -25,6 +24,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# AWS SDK (only the components we need)
+FetchContent_Declare(
+    aws-sdk-cpp
+    GIT_REPOSITORY https://github.com/aws/aws-sdk-cpp.git
+    GIT_TAG        1.11.321
+)
+set(BUILD_ONLY "bedrock-runtime" CACHE STRING "" FORCE)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(AUTORUN_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(aws-sdk-cpp)
+
 find_package(Threads REQUIRED)
 
 add_executable(server server.cpp)
@@ -35,4 +45,5 @@ target_link_libraries(server PRIVATE
     Threads::Threads
     httplib::httplib
     nlohmann_json::nlohmann_json
+    AWS::aws-sdk-cpp-bedrock-runtime
 )
