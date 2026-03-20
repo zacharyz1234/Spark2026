@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Debugger</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="layout">
+
+    <!-- Left Sidebar: Repo History -->
+    <aside class="sidebar">
+      <h2 class="sidebar-title">Repos</h2>
+      <ul id="repo-list" class="repo-list">
+        <li class="repo-empty">No repos yet</li>
+      </ul>
+    </aside>
+
+    <!-- Main Panel -->
+    <main class="main">
+      <header class="main-header">
+        <h1>AI Debugger</h1>
+        <p class="subtitle">Enter a GitHub repo to analyze</p>
+      </header>
+
+      <section class="input-section">
+        <form id="repo-form" class="repo-form">
+          <input
+            type="url"
+            id="repo-input"
+            class="repo-input"
+            placeholder="https://github.com/user/repo"
+            pattern="https://github\.com/.+/.+"
+            required
+          />
+          <button type="submit" class="submit-btn">Debug</button>
+        </form>
+        <p id="input-error" class="input-error hidden">Please enter a valid GitHub URL.</p>
+      </section>
+
+      <section class="output-section">
+        <div id="output-panel" class="output-panel">
+          <span class="output-placeholder">Debug output will appear here...</span>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <script src="linking.js"></script>
+</body>
+</html>
