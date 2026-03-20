@@ -1,13 +1,20 @@
-const form = document.getElementById('repo-form');
-const input = document.getElementById('repo-input');
-const repoList = document.getElementById('repo-list');
-const outputPanel = document.getElementById('output-panel');
-const inputError = document.getElementById('input-error');
-const tokenInput = document.getElementById('token-input');
+const form               = document.getElementById('repo-form');
+const input              = document.getElementById('repo-input');
+const repoList           = document.getElementById('repo-list');
+const outputPanel        = document.getElementById('output-panel');
+const inputError         = document.getElementById('input-error');
+const tokenInput         = document.getElementById('token-input');
+const fileSelectorSection = document.getElementById('file-selector-section');
+const fileListEl         = document.getElementById('file-list');
+const selectAllBtn       = document.getElementById('select-all-btn');
+const deselectAllBtn     = document.getElementById('deselect-all-btn');
+const scanBtn            = document.getElementById('scan-btn');
+const selectedCount      = document.getElementById('selected-count');
+const downloadBtn        = document.getElementById('download-btn');
 
 const API = 'http://localhost:8080';
 
-// { url: string, results: object[] }[]
+// { url: string, files: string[], results: object[] }[]
 let repos = [];
 let activeIndex = -1;
 
@@ -36,26 +43,96 @@ function renderSidebar() {
 function selectRepo(index) {
   activeIndex = index;
   renderSidebar();
+  renderFileSelector(repos[index].files ?? []);
   renderResults(repos[index].results);
 }
 
+// ── File Selector ─────────────────────────────────────────────────────────────
+
+function getExt(path) {
+  const parts = path.split('.');
+  return parts.length > 1 ? parts.pop() : '';
+}
+
+function renderFileSelector(files) {
+  fileListEl.innerHTML = '';
+
+  if (!files || files.length === 0) {
+    fileSelectorSection.classList.add('hidden');
+    return;
+  }
+
+  fileSelectorSection.classList.remove('hidden');
+
+  files.forEach(filePath => {
+    const label = document.createElement('label');
+    label.className = 'file-checkbox-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = filePath;
+    cb.checked = true;
+    cb.addEventListener('change', updateSelectionState);
+
+    const name = document.createElement('span');
+    name.className = 'file-checkbox-label';
+    name.textContent = filePath;
+    name.title = filePath;
+
+    const ext = getExt(filePath);
+    if (ext) {
+      const badge = document.createElement('span');
+      badge.className = 'file-ext';
+      badge.textContent = ext;
+      label.appendChild(cb);
+      label.appendChild(name);
+      label.appendChild(badge);
+    } else {
+      label.appendChild(cb);
+      label.appendChild(name);
+    }
+
+    fileListEl.appendChild(label);
+  });
+
+  updateSelectionState();
+}
+
+function getCheckboxes() {
+  return Array.from(fileListEl.querySelectorAll('input[type="checkbox"]'));
+}
+
+function updateSelectionState() {
+  const boxes = getCheckboxes();
+  const checked = boxes.filter(b => b.checked);
+  selectedCount.textContent = `${checked.length} of ${boxes.length} file${boxes.length !== 1 ? 's' : ''} selected`;
+  scanBtn.disabled = checked.length === 0;
+}
+
+selectAllBtn.addEventListener('click', () => {
+  getCheckboxes().forEach(b => (b.checked = true));
+  updateSelectionState();
+});
+
+deselectAllBtn.addEventListener('click', () => {
+  getCheckboxes().forEach(b => (b.checked = false));
+  updateSelectionState();
+});
+
 // ── Output rendering ──────────────────────────────────────────────────────────
 
-function severityLabel(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function severityClass(s) {
-  return 'sev-' + s;
-}
+function severityClass(s) { return 'sev-' + s; }
+function severityLabel(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 function renderResults(results) {
   outputPanel.innerHTML = '';
   if (!results || results.length === 0) {
-    outputPanel.innerHTML = '<span class="output-placeholder">Waiting for results...</span>';
+    outputPanel.innerHTML = '<span class="output-placeholder">Debug output will appear here...</span>';
+    downloadBtn.classList.add('hidden');
     return;
   }
   results.forEach(r => outputPanel.appendChild(buildFileCard(r)));
+  downloadBtn.classList.remove('hidden');
 }
 
 function buildFileCard(r) {
@@ -90,7 +167,6 @@ function buildFileCard(r) {
     return card;
   }
 
-  // Group issues by category
   const groups = {};
   r.issues.forEach(issue => {
     const cat = issue.category ?? 'other';
@@ -132,8 +208,18 @@ function buildFileCard(r) {
 
 // ── Backend calls ─────────────────────────────────────────────────────────────
 
-async function debugRepo(url, sessionId, repoEntry) {
-  // 1. Open SSE stream first
+async function fetchRepoFiles(url) {
+  const res = await fetch(`${API}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, token: tokenInput.value.trim() }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.files ?? [];
+}
+
+async function debugRepo(url, sessionId, selectedFiles, repoEntry) {
   const es = new EventSource(`${API}/stream?session_id=${sessionId}`);
   es.onmessage = (e) => {
     try {
@@ -144,20 +230,73 @@ async function debugRepo(url, sessionId, repoEntry) {
     } catch (_) { /* ignore malformed */ }
   };
 
-  // 2. Kick off clone + analysis
   const res = await fetch(`${API}/debug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, session_id: sessionId, token: tokenInput.value.trim() }),
+    body: JSON.stringify({
+      url,
+      session_id: sessionId,
+      token: tokenInput.value.trim(),
+      files: selectedFiles,
+    }),
   });
 
   if (!res.ok) {
     es.close();
-    return `Error: ${await res.text()}`;
+    outputPanel.innerHTML = `<span class="result-error">Error: ${await res.text()}</span>`;
   }
-
-  await res.json();
 }
+
+// ── Download ──────────────────────────────────────────────────────────────────
+
+downloadBtn.addEventListener('click', () => {
+  if (activeIndex === -1) return;
+  const entry = repos[activeIndex];
+  const repoSlug = entry.url.replace('https://github.com/', '').replace(/\//g, '_');
+
+  // Build a plain-text report
+  const lines = [`GitInspect Report — ${entry.url}`, `Generated: ${new Date().toISOString()}`, ''];
+
+  entry.results.forEach(r => {
+    lines.push(`FILE: ${r.filePath ?? 'Unknown'}`);
+    if (r.fileSummary) lines.push(`Summary: ${r.fileSummary}`);
+    if (r.status === 'error') {
+      lines.push('  [Analysis failed]');
+    } else if (!r.issues || r.issues.length === 0) {
+      lines.push('  No issues found.');
+    } else {
+      r.issues.forEach(issue => {
+        const loc = issue.line ? ` L${issue.line}` : '';
+        lines.push(`  [${(issue.severity ?? 'info').toUpperCase()}]${loc} (${issue.category ?? 'other'}) ${issue.description}`);
+      });
+    }
+    lines.push('');
+  });
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gitinspect_${repoSlug}_${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── Scan button ───────────────────────────────────────────────────────────────
+
+scanBtn.addEventListener('click', async () => {
+  if (activeIndex === -1) return;
+  const entry = repos[activeIndex];
+  const selectedFiles = getCheckboxes().filter(b => b.checked).map(b => b.value);
+  if (selectedFiles.length === 0) return;
+
+  entry.results = [];
+  renderResults([]);
+  outputPanel.innerHTML = '<span class="output-loading">Scanning selected files...</span>';
+
+  const sessionId = crypto.randomUUID();
+  await debugRepo(entry.url, sessionId, selectedFiles, entry);
+});
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
@@ -174,15 +313,25 @@ form.addEventListener('submit', async (e) => {
   const existing = repos.findIndex(r => r.url === url);
   if (existing !== -1) { selectRepo(existing); input.value = ''; return; }
 
-  const sessionId = crypto.randomUUID();
-  const entry = { url, results: [] };
+  const entry = { url, files: [], results: [] };
   repos.unshift(entry);
   activeIndex = 0;
   renderSidebar();
   renderResults([]);
+  fileSelectorSection.classList.add('hidden');
   input.value = '';
 
-  await debugRepo(url, sessionId, entry);
+  outputPanel.innerHTML = '<span class="output-loading">Fetching file list...</span>';
+
+  const files = await fetchRepoFiles(url);
+  if (files === null) {
+    outputPanel.innerHTML = '<span class="result-error">Failed to fetch repo files.</span>';
+    return;
+  }
+
+  entry.files = files;
+  renderFileSelector(files);
+  outputPanel.innerHTML = '<span class="output-placeholder">Select files above and click "Scan Selected".</span>';
 });
 
 // Initial render
