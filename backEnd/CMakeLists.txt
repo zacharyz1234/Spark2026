@@ -38,6 +38,8 @@ FetchContent_MakeAvailable(aws-sdk-cpp)
 
 find_package(Threads REQUIRED)
 
+enable_testing()
+
 add_executable(server server.cpp)
 
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
@@ -49,3 +51,5 @@ target_link_libraries(server PRIVATE
     aws-cpp-sdk-bedrock-runtime
     aws-cpp-sdk-core
 )
+
+add_subdirectory(tests)
