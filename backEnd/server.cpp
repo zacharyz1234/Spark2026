@@ -2,6 +2,8 @@
 #include "nlohmann/json.hpp"
 #include "threadpool.hpp"
 #include "classes.hpp"
+#include "cors_validator.hpp"
+#include "rate_limiter.hpp"
 
 #include <aws/core/Aws.h>
 #include <aws/bedrock-runtime/BedrockRuntimeClient.h>
@@ -190,13 +192,49 @@ int main() {
 
     httplib::Server svr;
 
-    svr.set_default_headers({
-        {"Access-Control-Allow-Origin", "*"},
-        {"Access-Control-Allow-Headers", "Content-Type"}
+    CorsValidator corsValidator;
+    RateLimiter rateLimiter({
+        {"/debug",  {5,  60}},
+        {"/stream", {30, 60}},
+        {"/health", {60, 60}},
     });
 
-    svr.Options(".*", [](const httplib::Request&, httplib::Response& res) {
-        res.status = 204;
+    svr.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res)
+        -> httplib::Server::HandlerResponse
+    {
+        std::string origin = req.get_header_value("Origin");
+
+        // 1. CORS check
+        auto corsResult = corsValidator.validate(origin);
+        if (!corsResult.allowed) {
+            res.status = 403;
+            res.set_content("Forbidden", "text/plain");
+            std::cerr << "[CORS] blocked " << req.remote_addr << " origin=" << origin << "\n";
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        if (!corsResult.originHeader.empty()) {
+            res.set_header("Access-Control-Allow-Origin", corsResult.originHeader);
+        }
+
+        // 2. Handle OPTIONS preflight (after CORS passes)
+        if (req.method == "OPTIONS") {
+            res.status = 204;
+            res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            res.set_header("Access-Control-Allow-Headers", "Content-Type");
+            return httplib::Server::HandlerResponse::Handled;
+        }
+
+        // 3. Rate limit check
+        auto rlResult = rateLimiter.check(req.remote_addr, req.path);
+        if (!rlResult.allowed) {
+            res.status = 429;
+            res.set_header("Retry-After", std::to_string(rlResult.retryAfter));
+            res.set_content("Rate limit exceeded", "text/plain");
+            std::cerr << "[RATE] blocked " << req.remote_addr << " path=" << req.path << "\n";
+            return httplib::Server::HandlerResponse::Handled;
+        }
+
+        return httplib::Server::HandlerResponse::Unhandled;
     });
 
     svr.Post("/debug", handleDebug);
