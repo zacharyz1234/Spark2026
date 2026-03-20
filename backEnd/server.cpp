@@ -34,11 +34,16 @@ static const std::string MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Read the system prompt from disk once
-static std::string loadPrompt() {
-    std::ifstream f("../AWS_Bedrock_Prompt/Prompt.txt");
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
+
+static std::string loadPromptFromDisk() {
+    using namespace std;
+    static string prompt = []() {
+        ifstream f("../AWS_Bedrock_Prompt/Prompt.txt"); //pulls from txt 
+        ostringstream ss;
+        ss << f.rdbuf();
+        return ss.str();
+    }();
+    return prompt;
 }
 
 // Read a file's contents into a string
@@ -137,7 +142,7 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
     }
 
     auto files = collectFiles(cloneDir);
-    std::string prompt = loadPrompt();
+    std::string prompt = loadPromptFromDisk();
 
     for (auto& filePath : files) {
         std::string content = readFile(filePath);
