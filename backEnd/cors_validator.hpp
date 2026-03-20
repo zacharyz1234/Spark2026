@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+using sizeT = std::size_t;
+
 class CorsValidator {
 public:
     explicit CorsValidator() {
@@ -19,18 +21,18 @@ public:
 
         // Parse comma-separated list
         std::string raw(env);
-        std::size_t start = 0;
+        sizeT start = 0;
         int index = 0;
 
         while (start <= raw.size()) {
-            std::size_t comma = raw.find(',', start);
+            sizeT comma = raw.find(',', start); //finds the comma
             std::string token = (comma == std::string::npos)
                 ? raw.substr(start)
                 : raw.substr(start, comma - start);
 
             // Trim leading and falling whitespace
-            std::size_t lpos = token.find_first_not_of(" \t\r\n");
-            std::size_t rpos = token.find_last_not_of(" \t\r\n");
+            sizeT lpos = token.find_first_not_of(" \t\r\n");
+            sizeT rpos = token.find_last_not_of(" \t\r\n");
 
             if (lpos == std::string::npos) {
                 // Empty after trimming
