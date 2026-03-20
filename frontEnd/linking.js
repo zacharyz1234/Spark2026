@@ -3,11 +3,9 @@ const input = document.getElementById('repo-input');
 const repoList = document.getElementById('repo-list');
 const outputPanel = document.getElementById('output-panel');
 const inputError = document.getElementById('input-error');
+const tokenInput = document.getElementById('token-input');
 
 const API = 'http://localhost:8080';
-
-// Set your GitHub token here for private repos (leave empty for public)
-const GITHUB_TOKEN = '';
 
 // { url: string, results: object[] }[]
 let repos = [];
@@ -43,16 +41,12 @@ function selectRepo(index) {
 
 // ── Output rendering ──────────────────────────────────────────────────────────
 
-function severityLabel(n) {
-  const labels = ['', 'Low', 'Low-Med', 'Medium', 'High', 'Critical'];
-  return labels[n] ?? n;
+function severityLabel(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function severityClass(n) {
-  if (n >= 5) return 'sev-critical';
-  if (n >= 4) return 'sev-high';
-  if (n >= 3) return 'sev-medium';
-  return 'sev-low';
+function severityClass(s) {
+  return 'sev-' + s;
 }
 
 function renderResults(results) {
@@ -70,49 +64,54 @@ function buildFileCard(r) {
 
   const title = document.createElement('div');
   title.className = 'file-title';
-  title.textContent = r.file ?? 'Unknown file';
+  title.textContent = r.filePath ?? 'Unknown file';
   card.appendChild(title);
 
-  if (r.error) {
+  if (r.status === 'error') {
     const err = document.createElement('p');
     err.className = 'result-error';
-    err.textContent = r.error;
+    err.textContent = 'Analysis failed for this file.';
     card.appendChild(err);
     return card;
   }
 
-  const sections = [
-    { key: 'bugs',        label: 'Bugs',               hasSeverity: true },
-    { key: 'security',    label: 'Security Issues',     hasSeverity: true },
-    { key: 'suggestions', label: 'Suggestions',         hasSeverity: false },
-  ];
+  if (!r.issues || r.issues.length === 0) {
+    const none = document.createElement('p');
+    none.className = 'result-desc';
+    none.textContent = 'No issues found.';
+    card.appendChild(none);
+    return card;
+  }
 
-  sections.forEach(({ key, label, hasSeverity }) => {
-    const items = r[key];
-    if (!items || items.length === 0) return;
+  // Group issues by category
+  const groups = {};
+  r.issues.forEach(issue => {
+    const cat = issue.category ?? 'other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(issue);
+  });
 
+  Object.entries(groups).forEach(([cat, issues]) => {
     const section = document.createElement('div');
     section.className = 'result-section';
 
     const h = document.createElement('div');
     h.className = 'result-section-title';
-    h.textContent = label;
+    h.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
     section.appendChild(h);
 
-    items.forEach(item => {
+    issues.forEach(issue => {
       const row = document.createElement('div');
       row.className = 'result-row';
 
-      if (hasSeverity) {
-        const badge = document.createElement('span');
-        badge.className = 'sev-badge ' + severityClass(item.severity);
-        badge.textContent = severityLabel(item.severity);
-        row.appendChild(badge);
-      }
+      const badge = document.createElement('span');
+      badge.className = 'sev-badge ' + severityClass(issue.severity);
+      badge.textContent = severityLabel(issue.severity);
+      row.appendChild(badge);
 
       const desc = document.createElement('span');
       desc.className = 'result-desc';
-      desc.textContent = (item.line ? `L${item.line}: ` : '') + item.description;
+      desc.textContent = (issue.line ? `L${issue.line}: ` : '') + issue.description;
       row.appendChild(desc);
 
       section.appendChild(row);
@@ -132,6 +131,7 @@ async function debugRepo(url, sessionId, repoEntry) {
   es.onmessage = (e) => {
     try {
       const result = JSON.parse(e.data);
+      if (result.event === 'done') { es.close(); return; }
       repoEntry.results.push(result);
       if (repos[activeIndex] === repoEntry) renderResults(repoEntry.results);
     } catch (_) { /* ignore malformed */ }
@@ -141,7 +141,7 @@ async function debugRepo(url, sessionId, repoEntry) {
   const res = await fetch(`${API}/debug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, session_id: sessionId, token: GITHUB_TOKEN }),
+    body: JSON.stringify({ url, session_id: sessionId, token: tokenInput.value.trim() }),
   });
 
   if (!res.ok) {
@@ -149,14 +149,7 @@ async function debugRepo(url, sessionId, repoEntry) {
     return `Error: ${await res.text()}`;
   }
 
-  const { queued } = await res.json();
-
-  // Close SSE once all results are in
-  const waitForAll = () => {
-    if (repoEntry.results.length >= queued) { es.close(); return; }
-    setTimeout(waitForAll, 200);
-  };
-  waitForAll();
+  await res.json();
 }
 
 // ── Form submit ───────────────────────────────────────────────────────────────
