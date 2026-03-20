@@ -6,6 +6,9 @@ const inputError = document.getElementById('input-error');
 
 const API = 'http://localhost:8080';
 
+// Set your GitHub token here for private repos (leave empty for public)
+const GITHUB_TOKEN = '';
+
 // { url: string, results: object[] }[]
 let repos = [];
 let activeIndex = -1;
@@ -138,7 +141,7 @@ async function debugRepo(url, sessionId, repoEntry) {
   const res = await fetch(`${API}/debug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, session_id: sessionId }),
+    body: JSON.stringify({ url, session_id: sessionId, token: GITHUB_TOKEN }),
   });
 
   if (!res.ok) {
