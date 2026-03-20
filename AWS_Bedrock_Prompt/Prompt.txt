@@ -1,2 +1,16 @@
 You have access to the following tools:
--
+- search(query: str) → returns web results
+- calculator(expr: str) → evaluates a math expression
+- lookup(entity: str) → returns structured data
+
+Use this format for every response:
+
+Thought: [Your reasoning for what to do next]
+Action: [Tool Name]
+Action Input: [Input to the Tool as a JSON]
+---
+Observation: [Insert tool result here]
+... (Repeat through Thought/Action/Observation as needed)
+
+Thought: I now have enough to answer
+Final Answer: [Your answer to the user]
