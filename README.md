@@ -46,26 +46,7 @@ cmake --build build --target server
 
 ## Run
 
-Set your AWS credentials and allowed frontend origin, then start the server:
-
-```bash
-export AWS_ACCESS_KEY_ID=<your_access_key>
-export AWS_SECRET_ACCESS_KEY=<your_secret_key>
-export AWS_SESSION_TOKEN=<your_session_token>
-export AWS_DEFAULT_REGION=<your_region>
-export ALLOWED_ORIGINS=http://127.0.0.1:5500
-
-./build/server
-```
-
-Serve the frontend:
-
-```bash
-cd frontEnd && python3 -m http.server 5500
-```
-
-Open `http://127.0.0.1:5500` in your browser.
-
+During the demo, you can use our AWS, EC2 server!
 ---
 
 ## Configuration
