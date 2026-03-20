@@ -118,9 +118,17 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
         res.status = 400; res.set_content("Missing url or session_id", "text/plain"); return;
     }
 
+    // Optionally inject GitHub token for private repos
+    std::string token = body.value("token", "");
+    std::string cloneUrl = url;
+    if (!token.empty()) {
+        // Insert token: https://token@github.com/user/repo
+        cloneUrl.insert(8, token + "@"); // after "https://"
+    }
+
     // Clone into /tmp/<session_id>
     std::string cloneDir = "/tmp/" + sessionId;
-    std::string cmd = "git clone --depth=1 " + url + " " + cloneDir + " 2>&1";
+    std::string cmd = "git clone --depth=1 " + cloneUrl + " " + cloneDir + " 2>&1";
     int rc = std::system(cmd.c_str());
     if (rc != 0) {
         res.status = 500; res.set_content("Clone failed", "text/plain"); return;

@@ -33,6 +33,7 @@ FetchContent_Declare(
 set(BUILD_ONLY "bedrock-runtime" CACHE STRING "" FORCE)
 set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(AUTORUN_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 FetchContent_MakeAvailable(aws-sdk-cpp)
 
 find_package(Threads REQUIRED)
@@ -45,5 +46,6 @@ target_link_libraries(server PRIVATE
     Threads::Threads
     httplib::httplib
     nlohmann_json::nlohmann_json
-    AWS::aws-sdk-cpp-bedrock-runtime
+    aws-cpp-sdk-bedrock-runtime
+    aws-cpp-sdk-core
 )
