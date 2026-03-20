@@ -17,15 +17,18 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <atomic>
+#include <memory>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-// ── Globals ──────────────────────────────────────────────────────────────────
+
+
 
 ThreadPool pool;
 
-// SSE: map of session_id → sink (written under sinkMutex)
+// SSE: map of session_id sink (written under sinkMutex)
 std::mutex sinkMutex;
 std::unordered_map<std::string, httplib::DataSink*> sinks;
 
@@ -39,6 +42,10 @@ static std::string loadPromptFromDisk() {
     using namespace std;
     static string prompt = []() {
         ifstream f("../AWS_Bedrock_Prompt/Prompt.txt"); //pulls from txt 
+        if(!f.is_open()){
+            cerr << "[WARNING!] Prompt failed to open from disk" << endl;
+            return string{};
+        }
         ostringstream ss;
         ss << f.rdbuf();
         return ss.str();
@@ -144,11 +151,14 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
     auto files = collectFiles(cloneDir);
     std::string prompt = loadPromptFromDisk();
 
+    // Shared counter — last task to finish cleans up the cloned directory
+    auto pending = std::make_shared<std::atomic<int>>((int)files.size());
+
     for (auto& filePath : files) {
         std::string content = readFile(filePath);
         std::string filename = filePath.filename().string();
 
-        pool.enqueue([sessionId, filename, content, prompt]() {
+        pool.enqueue([sessionId, filename, content, prompt, cloneDir, pending]() {
             Aws::SDKOptions options;
             Aws::InitAPI(options);
             {
@@ -157,6 +167,15 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
                 sendSSE(sessionId, result);
             }
             Aws::ShutdownAPI(options);
+
+            // Last task cleans up the cloned repo
+            if (--(*pending) == 0) {
+                std::error_code ec;
+                fs::remove_all(cloneDir, ec);
+                if (ec) {
+                    std::cerr << "[CLEANUP] Failed to remove " << cloneDir << ": " << ec.message() << "\n";
+                }
+            }
         });
     }
 
@@ -189,7 +208,6 @@ void handleStream(const httplib::Request& req, httplib::Response& res) {
     );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
 
 int main() {
     Aws::SDKOptions options;
@@ -209,7 +227,7 @@ int main() {
     {
         std::string origin = req.get_header_value("Origin");
 
-        // 1. CORS check
+        // 1. CORS check with the validator
         auto corsResult = corsValidator.validate(origin);
         if (!corsResult.allowed) {
             res.status = 403;
