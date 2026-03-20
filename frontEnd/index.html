@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Debugger</title>
+  <title>GitInspect</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -20,7 +20,7 @@
     <!-- Main Panel -->
     <main class="main">
       <header class="main-header">
-        <h1>AI Debugger</h1>
+        <div class="brand-badge">GitInspect</div>
         <p class="subtitle">Enter a GitHub repo to analyze</p>
       </header>
 
@@ -35,12 +35,32 @@
             required
           />
           <input type="hidden" id="token-input" value="" />
-          <button type="submit" class="submit-btn">Debug</button>
+          <button type="submit" class="submit-btn">Fetch Files</button>
         </form>
         <p id="input-error" class="input-error hidden">Please enter a valid GitHub URL.</p>
       </section>
 
+      <!-- File Selector (shown after repo files are fetched) -->
+      <section id="file-selector-section" class="file-selector-section hidden">
+        <div class="file-selector-header">
+          <span class="file-selector-label">Select files to scan</span>
+          <div class="file-selector-actions">
+            <button id="select-all-btn" class="selector-btn" type="button">Select All</button>
+            <button id="deselect-all-btn" class="selector-btn" type="button">Deselect All</button>
+          </div>
+        </div>
+        <div id="file-list" class="file-list"></div>
+        <div class="file-selector-footer">
+          <span id="selected-count" class="selected-count">0 files selected</span>
+          <button id="scan-btn" class="submit-btn" type="button" disabled>Scan Selected</button>
+        </div>
+      </section>
+
       <section class="output-section">
+        <div class="output-header">
+          <span class="output-title">Output</span>
+          <button id="download-btn" class="selector-btn hidden" type="button">⬇ Download</button>
+        </div>
         <div id="output-panel" class="output-panel">
           <span class="output-placeholder">Debug output will appear here...</span>
         </div>
