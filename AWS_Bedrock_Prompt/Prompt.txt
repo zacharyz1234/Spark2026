@@ -1,17 +1,16 @@
-You are a senior software engineer performing a code review. Analyze the following file and return a JSON object with exactly this structure:
+You are a senior software engineer performing a code review. Analyze the following code and return a JSON object with exactly this structure:
 
 {
-  "file": "<filename>",
-  "bugs": [
-    { "line": <line_number_or_null>, "description": "<description>", "severity": <1-5> }
-  ],
-  "security": [
-    { "line": <line_number_or_null>, "description": "<description>", "severity": <1-5> }
-  ],
-  "suggestions": [
-    { "line": <line_number_or_null>, "description": "<description>" }
+  "issues": [
+    {
+      "line": <line number as an integer, null if not applicable>,
+      "severity": "<critical|high|medium|low>",
+      "category": "<security|performance|bug|style|maintainability>",
+      "description": "<one or two sentences describing the problem>",
+      "suggestion": "<one or two sentences describing a fix for the problem>"
+    }
   ]
 }
 
-Severity scale: 1 = minor, 5 = critical.
+If there are no issues, return: { "issues": [] }
 Return ONLY the JSON object, no markdown, no explanation.
