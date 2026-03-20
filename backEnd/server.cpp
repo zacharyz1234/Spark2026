@@ -19,6 +19,7 @@
 #include <functional>
 #include <atomic>
 #include <memory>
+#include <unordered_set>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -41,14 +42,24 @@ static const std::string MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0";
 static std::string loadPromptFromDisk() {
     using namespace std;
     static string prompt = []() {
-        ifstream f("../AWS_Bedrock_Prompt/Prompt.txt"); //pulls from txt 
-        if(!f.is_open()){
-            cerr << "[WARNING!] Prompt failed to open from disk" << endl;
-            return string{};
+        for (const char* path : {
+            "../AWS_Bedrock_Prompt/Prompt.txt",
+            "AWS_Bedrock_Prompt/Prompt.txt",
+            "../../AWS_Bedrock_Prompt/Prompt.txt"
+        }) {
+            ifstream f(path);
+            if (f.is_open()) {
+                ostringstream ss;
+                ss << f.rdbuf();
+                string content = ss.str();
+                if (!content.empty()) {
+                    cerr << "[DEBUG] Loaded prompt from: " << path << " (" << content.size() << " bytes)\n";
+                    return content;
+                }
+            }
         }
-        ostringstream ss;
-        ss << f.rdbuf();
-        return ss.str();
+        cerr << "[WARN] Failed to load prompt — using empty prompt\n";
+        return string{};
     }();
     return prompt;
 }
@@ -61,13 +72,21 @@ static std::string readFile(const fs::path& p) {
     return ss.str();
 }
 
-// Collect all regular files under a directory
+// Collect all regular files under a directory, skipping .git internals and binary files
 static std::vector<fs::path> collectFiles(const fs::path& dir) {
     std::vector<fs::path> files;
+    static const std::unordered_set<std::string> skipExts = {
+        ".pack", ".idx", ".rev", ".bin", ".exe", ".so", ".dylib", ".o", ".a"
+    };
     for (auto& entry : fs::recursive_directory_iterator(dir)) {
-        if (entry.is_regular_file()) {
-            files.push_back(entry.path());
-        }
+        if (!entry.is_regular_file()) continue;
+        // Skip .git directory
+        auto rel = fs::relative(entry.path(), dir);
+        if (rel.begin() != rel.end() && rel.begin()->string() == ".git") continue;
+        // Skip known binary extensions
+        std::string ext = entry.path().extension().string();
+        if (skipExts.count(ext)) continue;
+        files.push_back(entry.path());
     }
     return files;
 }
@@ -97,7 +116,12 @@ static std::string callBedrock(
         })}
     };
 
-    auto bodyStr = requestBody.dump();
+    std::string bodyStr;
+    try {
+        bodyStr = requestBody.dump();
+    } catch (...) {
+        return R"({"error": "Failed to serialize request — file may contain binary content"})";
+    }
     auto bodyStream = Aws::MakeShared<Aws::StringStream>("BedrockRequest");
     *bodyStream << bodyStr;
 
@@ -122,6 +146,7 @@ static std::string callBedrock(
 
 // POST /debug  { "url": "https://github.com/user/repo" }
 void handleDebug(const httplib::Request& req, httplib::Response& res) {
+    std::cerr << "[DEBUG] POST /debug received from " << req.remote_addr << "\n";
     json body;
     try { body = json::parse(req.body); }
     catch (...) { res.status = 400; res.set_content("Invalid JSON", "text/plain"); return; }
@@ -143,13 +168,18 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
     // Clone into /tmp/<session_id>
     std::string cloneDir = "/tmp/" + sessionId;
     std::string cmd = "git clone --depth=1 " + cloneUrl + " " + cloneDir + " 2>&1";
+    std::cerr << "[DEBUG] Cloning " << url << " into " << cloneDir << "\n";
     int rc = std::system(cmd.c_str());
     if (rc != 0) {
+        std::cerr << "[DEBUG] Clone failed with exit code " << rc << "\n";
         res.status = 500; res.set_content("Clone failed", "text/plain"); return;
     }
+    std::cerr << "[DEBUG] Clone succeeded\n";
 
     auto files = collectFiles(cloneDir);
+    std::cerr << "[DEBUG] Found " << files.size() << " files to analyze\n";
     std::string prompt = loadPromptFromDisk();
+    std::cerr << "[DEBUG] Prompt loaded (" << prompt.size() << " bytes)\n";
 
     // Shared counter — last task to finish cleans up the cloned directory
     auto pending = std::make_shared<std::atomic<int>>((int)files.size());
@@ -159,17 +189,22 @@ void handleDebug(const httplib::Request& req, httplib::Response& res) {
         std::string filename = filePath.filename().string();
 
         pool.enqueue([sessionId, filename, content, prompt, cloneDir, pending]() {
+            std::cerr << "[DEBUG] Processing file: " << filename << "\n";
             Aws::SDKOptions options;
             Aws::InitAPI(options);
             {
                 Aws::BedrockRuntime::BedrockRuntimeClient client;
+                std::cerr << "[DEBUG] Calling Bedrock for: " << filename << "\n";
                 std::string result = callBedrock(client, prompt, filename, content);
+                std::cerr << "[DEBUG] Bedrock response for " << filename << " (" << result.size() << " bytes)\n";
                 sendSSE(sessionId, result);
+                std::cerr << "[DEBUG] SSE sent for: " << filename << "\n";
             }
             Aws::ShutdownAPI(options);
 
             // Last task cleans up the cloned repo
             if (--(*pending) == 0) {
+                std::cerr << "[DEBUG] All files done, cleaning up " << cloneDir << "\n";
                 std::error_code ec;
                 fs::remove_all(cloneDir, ec);
                 if (ec) {
