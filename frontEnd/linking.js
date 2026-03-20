@@ -67,6 +67,13 @@ function buildFileCard(r) {
   title.textContent = r.filePath ?? 'Unknown file';
   card.appendChild(title);
 
+  if (r.fileSummary) {
+    const summary = document.createElement('p');
+    summary.className = 'file-summary';
+    summary.textContent = r.fileSummary;
+    card.appendChild(summary);
+  }
+
   if (r.status === 'error') {
     const err = document.createElement('p');
     err.className = 'result-error';

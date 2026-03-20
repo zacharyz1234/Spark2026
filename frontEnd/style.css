@@ -198,8 +198,15 @@ body {
   font-size: 0.9rem;
   font-weight: 600;
   color: #58a6ff;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
   word-break: break-all;
+}
+
+.file-summary {
+  font-size: 0.8rem;
+  color: #8b949e;
+  font-style: italic;
+  margin-bottom: 0.75rem;
 }
 
 .result-section {
